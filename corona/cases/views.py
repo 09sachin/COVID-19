@@ -1,149 +1,69 @@
-from django.shortcuts import render, HttpResponse
+from django.shortcuts import render, HttpResponse,redirect
 import requests
 import json
 from bs4 import BeautifulSoup
+from .forms import search_form
 
 # Create your views here.
-api = 'https://bing.com/covid/graphdata'
+api = 'https://pomber.github.io/covid19/timeseries.json'
 bing = requests.get('https://www.bing.com/covid')
+requested_url = requests.get(api)
+json_list = requested_url.json()
+countries = list(json_list.keys())
 
 
 def index(request):
-    r = requests.get(api)
-    x = r.json()
-    print(x)
-    t = []
-    change = []
+    world = len(countries)
+    cases =[]
+    for i in range(world):
+        cases.append(json_list[countries[i]])
+    total_days = len(cases[0])
     date = []
-    recover = []
-    fatal = []
-    active = []
-    percent_active = []
-    closed = []
-    percent_closed = []
-    soup2 = BeautifulSoup(bing.content, features="html.parser")
-    text = soup2.get_text(strip=True)
-    m = text.split()
-    n = len(m)
-    tokens = m[n - 1]
-    token = tokens
+    confirmed = []
+    deaths = []
+    recovered = []
+    for i in range(total_days):
+        cnf = 0
+        dth = 0
+        rec = 0
+        date.append(cases[0][i]['date'])
+        for x in range(world):
+            cnf=cnf+int(cases[x][i]['confirmed'])
+            dth=dth+int(cases[x][i]['deaths'])
+            rec=rec+int(cases[x][i]['recovered'])
+        confirmed.append(cnf)
+        deaths.append(dth)
+        recovered.append(rec)
+    if request.method=="POST":
+        form = search_form(request.POST)
+        if form.is_valid():
+            print('valid')
+            cntry = form.cleaned_data['country']
+            url = '/region/'
+            url = url + str(cntry)
+            return redirect(url)
 
-    tc = token.split('world')
-    gggg = len(tc)
-    tkn = tc[gggg - 1]
-    tkn = tkn[5:]
-
-    characters_to_remove = '"'
-    characters_to_replace = ','
-
-    for character in characters_to_remove:
-        tkn = tkn.replace(character, "")
-
-    for character in characters_to_replace:
-        tkn = tkn.replace(character, ". ")
-
-    first = ";"
-    second = "}"
-
-    for character in first:
-        tkn = tkn.replace(character, "")
-    for character in second:
-        tkn = tkn.replace(character, "")
-
-    live = tkn
-    splt = live.split('.')
-    confirmed = splt[0]
-    death = splt[1]
-    recovered = splt[2]
-    updated = splt[3]
-    confirmed1 = confirmed.split(':')
-    confirmed2 = confirmed1[1]
-    death1 = death.split(':')
-    death2 = death1[1]
-    recovered1 = recovered.split(':')
-    recovered2 = recovered1[1]
-
-    updated2 = updated
-
-    for i in range(len(x['world'])):
-        b = x['world'][i]['confirmed']
-        t.append(b)
-        date.append(x['world'][i]['date'])
-        recover.append(x['world'][i]['recovered'])
-        fatal.append(x['world'][i]['fatal'])
-        a = x['world'][i]['confirmed'] - x['world'][i]['recovered'] - x['world'][i]['fatal']
-        active.append(a)
-        cl = (x['world'][i]['recovered'] + x['world'][i]['fatal'])
-        closed.append(cl)
-        pc = "{:.3f}".format(float(float(cl / b) * 100))
-        percent_closed.append(pc)
-
-        if i == 0:
-            diff = t[i] - 0
-            change.append(diff)
-            p = "{:.3f}".format(float(float(diff / a) * 100))
-            percent_active.append(p)
         else:
-            diff = t[i] - t[i - 1]
-            change.append(diff)
-            p = "{:.3f}".format(float(float(diff / a) * 100))
-            percent_active.append(p)
+            form = search_form(request.POST)
+    else:
+        form = search_form()
 
-        # print(x['world'][i]['confirmed'], "   ", diff, '\n')
-
-    context = {'change': change, 'confirmed': t, 'date': date, 'recovered': recover, 'deceased': fatal,
-               'active': active, 'closed': closed, 'percent_closed': percent_closed,
-               'p_active': percent_active, 'conf': confirmed2, 'dead': death2, 'rec': recovered2, 'time': updated2}
-    return render(request, 'index.html', context)
+    context = {'date':date,'confirmed':confirmed,'recovered':recovered,'deceased':deaths,'form':form}
+    return render(request, 'index.html',context)
 
 
 def region(request, t):
-    try:
-        soup2 = BeautifulSoup(bing.content, features="html.parser")
-        text = soup2.get_text(strip=True)
-        tokens = text.split()
-        country = '"' + t + '"'
-        cnt = t
-        loc = 0
-        for x in range(len(tokens)):
-            pos = tokens[x].find(country)
-            if pos != -1:
-                loc = x
-        ind = tokens[loc].split(country)
-        li = (len(ind))
-        india = ind[li - 1].split('"lastUpdated"')
-        tkn = india[0]
-        tkn = tkn[3:]
-        characters_to_remove = '"'
-        characters_to_replace = ','
-
-        for character in characters_to_remove:
-            tkn = tkn.replace(character, "")
-
-        for character in characters_to_replace:
-            tkn = tkn.replace(character, ". ")
-        first = ";"
-        second = "}"
-
-        for character in first:
-            tkn = tkn.replace(character, "")
-        for character in second:
-            tkn = tkn.replace(character, "")
-
-        live = tkn
-        splt = live.split('.')
-        confirmed = splt[0]
-        death = splt[1]
-        recovered = splt[2]
-        confirmed1 = confirmed.split(':')
-        confirmed2 = confirmed1[1]
-        death1 = death.split(':')
-        death2 = death1[1]
-        recovered1 = recovered.split(':')
-        recovered2 = recovered1[1]
-
-        context = {'conf': confirmed2, 'dead': death2, 'rec': recovered2, 'name': cnt}
-
-        return render(request, 'region.html', context)
-    except:
-        return HttpResponse("<h2 style='test-align:center;padding-top:40px'>Requested region not found</h2>")
+    requested_country = str(t)
+    cases = json_list[requested_country]
+    total_days = len(cases)
+    date = []
+    confirmed = []
+    deaths = []
+    recovered = []
+    for i in range(total_days):
+        date.append(cases[i]['date'])
+        confirmed.append(cases[i]['confirmed'])
+        deaths.append(cases[i]['deaths'])
+        recovered.append(cases[i]['recovered'])
+    context = {'date': date, 'confirmed': confirmed, 'recovered': recovered, 'deceased': deaths,'country':requested_country}
+    return render(request, 'region.html',context)
